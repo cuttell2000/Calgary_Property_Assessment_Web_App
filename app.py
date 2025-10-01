@@ -203,4 +203,11 @@ def show_map():
     return render_template('map.html', map_html=map_html, community_name=long_comm_name)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Get the port from the environment variable $PORT,
+    # or default to 5000 for local testing.
+    port = int(os.environ.get('PORT', 5000))
+    
+    # Run the app, binding to 0.0.0.0 and the retrieved port.
+    app.run(host='0.0.0.0', port=port)
+
+    # app.run(debug=True, host='0.0.0.0', port=5000)
