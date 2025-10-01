@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Calgary Property Map</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .container { 
+            width: 80%; 
+            max-width: 600px; 
+            margin: 40px auto; 
+            padding: 20px; 
+            background-color: white;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        h1 {
+            color: #007bff;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        h2 {
+            font-size: 1.2em;
+            color: #555;
+            margin-top: 20px;
+        }
+        form { 
+            display: flex;
+            align-items: center;
+            gap: 10px; 
+        }
+        label {
+            font-weight: bold;
+        }
+        select, button {
+            padding: 10px 12px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 1em;
+        }
+        select {
+            flex-grow: 1; 
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .overview-link {
+            display: block;
+            margin-top: 15px;
+            padding: 10px;
+            text-align: center;
+            background-color: #f0f8ff;
+            border: 1px solid #b8daff;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .overview-link:hover {
+            background-color: #e6f7ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Select a Community to Map Properties</h1>
+        
+        <form action="{{ url_for('show_map') }}" method="post">
+            <label for="community_name">Choose a community:</label>
+            <select name="community_name" id="community_name">
+                <option value="" disabled selected>--- Select a Community ---</option>
+                {% for community in community_names %}
+                    <option value="{{ community }}">{{ community }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Show Map</button>
+        </form>
+        
+        <hr style="margin-top: 30px; margin-bottom: 20px;">
+
+        <h2>Or View the City Overview</h2>
+        
+        <a href="{{ url_for('calgary_overview') }}" class="overview-link">
+            View Full Calgary Community Map & Sectors
+        </a>
+
+    </div>
+</body>
+</html>
