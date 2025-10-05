@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calgary Property Map</title>
     <style>
         body { 
@@ -9,8 +10,8 @@
             color: #333;
         }
         .container { 
-            width: 80%; 
-            max-width: 600px; 
+            width: 90%; /* Increased width for better display */
+            max-width: 1000px; 
             margin: 40px auto; 
             padding: 20px; 
             background-color: white;
@@ -31,6 +32,7 @@
             display: flex;
             align-items: center;
             gap: 10px; 
+            flex-wrap: wrap; /* Allows wrapping on smaller screens */
         }
         label {
             font-weight: bold;
@@ -40,19 +42,24 @@
             border-radius: 4px;
             border: 1px solid #ccc;
             font-size: 1em;
+            transition: all 0.3s ease;
         }
         select {
             flex-grow: 1; 
+            min-width: 200px;
         }
         button {
             background-color: #007bff;
             color: white;
             cursor: pointer;
             border: none;
-            transition: background-color 0.3s ease;
         }
-        button:hover {
+        button:hover:not(:disabled) {
             background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #a0c3e8;
+            cursor: not-allowed;
         }
         .overview-link {
             display: block;
@@ -69,13 +76,86 @@
         .overview-link:hover {
             background-color: #e6f7ff;
         }
+        
+        /* --- NEW STYLES FOR LOADING --- */
+        #map-container-wrapper {
+            position: relative;
+            min-height: 600px; /* Ensure space for the spinner */
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 20px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        .spinner {
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #007bff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-text {
+            color: #007bff;
+            font-weight: bold;
+        }
+        /* Style for initial/error message */
+        #map-results p {
+            padding: 40px;
+            text-align: center;
+            color: #666;
+        }
+
+        /* --- MOBILE OPTIMIZATION (max-width: 600px) --- */
+        @media (max-width: 600px) {
+            .container {
+                width: 95%; /* More edge-to-edge on mobile */
+                margin: 20px auto;
+                padding: 15px;
+            }
+            form {
+                flex-direction: column; /* Stack elements vertically */
+                align-items: stretch;
+            }
+            select, button {
+                width: 100%; /* Full width for input and button */
+                min-width: 0;
+            }
+            #map-container-wrapper {
+                min-height: 400px; /* Reduced map height for mobile viewports */
+            }
+            h1 {
+                font-size: 1.3em;
+            }
+        }
+
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Select a Community to Map Properties</h1>
+        <!-- The H1 title will be updated by JS -->
+        <h1 id="main-title">Select a Community to Map Properties</h1>
         
-        <form action="{{ url_for('show_map') }}" method="post">
+        <!-- --- MODIFIED FORM FOR AJAX --- -->
+        <form id="community-form">
             <label for="community_name">Choose a community:</label>
             <select name="community_name" id="community_name">
                 <option value="" disabled selected>--- Select a Community ---</option>
@@ -83,8 +163,9 @@
                     <option value="{{ community }}">{{ community }}</option>
                 {% endfor %}
             </select>
-            <button type="submit">Show Map</button>
+            <button type="submit" id="submit-button">Show Map</button>
         </form>
+        <!-- --- END MODIFIED FORM --- -->
         
         <hr style="margin-top: 30px; margin-bottom: 20px;">
 
@@ -95,5 +176,105 @@
         </a>
 
     </div>
+
+    <!-- Map and Loading Indicator Wrapper -->
+    <div class="container" id="map-container-wrapper">
+        
+        <!-- Loading Spinner Overlay -->
+        <div id="loading-overlay">
+            <div class="spinner"></div>
+            <p class="loading-text">Loading Map Data...</p>
+            <p style="font-size: 0.9em; color: #888;">Processing GeoJSON, please wait.</p>
+        </div>
+        
+        <!-- Map Results Area -->
+        <div id="map-results">
+            <p>Select a community from the dropdown above and click "Show Map" to load the property assessment boundaries.</p>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('community-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const form = e.target;
+            const communityName = document.getElementById('community_name').value;
+            
+            const submitButton = document.getElementById('submit-button');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const mapResults = document.getElementById('map-results');
+            const mainTitle = document.getElementById('main-title');
+
+            if (!communityName) {
+                mapResults.innerHTML = '<p style="color: red;">Please select a community.</p>';
+                return;
+            }
+
+            // --- Step 1: Show Loading State ---
+            submitButton.disabled = true;
+            submitButton.textContent = 'Processing...';
+            loadingOverlay.style.display = 'flex'; // Show spinner
+            mapResults.innerHTML = ''; // Clear previous map/message
+
+            try {
+                // Use FormData to send the selected community name
+                const formData = new FormData(form);
+                
+                // IMPORTANT: We use {{ url_for('show_map') }} here to ensure the correct Flask route is targeted.
+                const response = await fetch('{{ url_for("show_map") }}', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    // Attempt to parse JSON error message if the server responded with an error (e.g., 400, 404, 500)
+                    const contentType = response.headers.get("content-type");
+                    let errorText = `Server returned status: ${response.status}.`;
+
+                    if (contentType && contentType.indexOf("application/json") !== -1) {
+                         const errorData = await response.json();
+                         errorText = errorData.error || errorText;
+                    }
+                    
+                    mapResults.innerHTML = `
+                        <div style="padding: 30px; text-align: center;">
+                            <p style="font-size: 1.1em; font-weight: bold; color: #dc3545;">Error Loading Map</p>
+                            <p style="color: #333;">${errorText}</p>
+                        </div>
+                    `;
+                    // Throw error to trigger the catch block cleanup
+                    throw new Error(errorText);
+                }
+
+                // --- Step 2: Process Success Response ---
+                const data = await response.json();
+                
+                // Update the main title dynamically
+                mainTitle.textContent = `${data.community_name} | Property Assessment Map`;
+
+                // Inject the raw HTML map content
+                mapResults.innerHTML = data.map_html; 
+
+            } catch (error) {
+                console.error("Map loading failed:", error);
+                
+                // Ensure a message is shown if the error was a network issue (no response.ok check)
+                if (mapResults.innerHTML === '') {
+                    mapResults.innerHTML = `
+                        <div style="padding: 30px; text-align: center;">
+                            <p style="font-size: 1.1em; font-weight: bold; color: #dc3545;">Network/Server Error</p>
+                            <p style="color: #333;">Could not complete the request. Check the server logs for details.</p>
+                        </div>
+                    `;
+                }
+
+            } finally {
+                // --- Step 3: Hide Loading State ---
+                loadingOverlay.style.display = 'none';
+                submitButton.disabled = false;
+                submitButton.textContent = 'Show Map';
+            }
+        });
+    </script>
 </body>
 </html>

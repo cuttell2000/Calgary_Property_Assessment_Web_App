@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, Response
 import geopandas as gpd
 import folium
 import json
@@ -68,8 +68,13 @@ except Exception as e:
 
 @app.route('/calgary_overview')
 def calgary_overview():
+    # if communities_gdf is None or sector_gdf is None:
+    #     return "Error: Data not loaded.", 500
+    
+    # Assume communities_gdf, sector_gdf, and calgary_center are defined globally or within scope
+
     if communities_gdf is None or sector_gdf is None:
-        return "Error: Data not loaded.", 500
+        return "Error: Data not loaded. Please ensure data is loaded at startup.", 500
 
     # Create map centered on Calgary
     calgary_map = folium.Map(location=calgary_center, zoom_start=10) # Zoom out for city view
@@ -93,8 +98,9 @@ def calgary_overview():
     folium.LayerControl().add_to(calgary_map)
 
     map_html = calgary_map._repr_html_()
+    community_name = "Calgary Overview"
 
-    return render_template('map.html', map_html=map_html, community_name="Calgary Overview")
+    return render_template('map.html', map_html=map_html, community_name=community_name)
 
 
 ## --- Existing Routes ---
@@ -113,15 +119,26 @@ def index():
 def show_map():
     selected_community = request.form.get('community_name')
 
-    # Note: properties_gdf is intentionally None globally, so we skip that check here.
+    # # Note: properties_gdf is intentionally None globally, so we skip that check here.
+    # if not selected_community or communities_gdf is None:
+    #     return "Error: Community not selected or boundary data not loaded.", 400
+    
     if not selected_community or communities_gdf is None:
-        return "Error: Community not selected or boundary data not loaded.", 400
+        # Instead of returning an error page, we return a JSON error for the AJAX handler
+        return Response('{"error": "Community not selected or boundary data not loaded."}', 
+                        status=400, 
+                        mimetype='application/json')
     
     # Step 1: Filter the Boundary GDF using the user's selection
     community_boundary = communities_gdf[communities_gdf['name'] == selected_community].copy()
 
+    # if community_boundary.empty:
+    #     return f"No boundary data found for community: {selected_community}", 404
+    
     if community_boundary.empty:
-        return f"No boundary data found for community: {selected_community}", 404
+        return Response('{"error": "No boundary data found for community."}', 
+                        status=404, 
+                        mimetype='application/json')
         
     # Step 2: Extract the GUARANTEED common key (comm_code)
     property_filter_code = community_boundary['comm_code'].iloc[0]
@@ -135,11 +152,14 @@ def show_map():
     filter_query = f"?$where=comm_code='{property_filter_code}'&$limit=700000"
     full_url = BASE_PROPERTY_URL + filter_query
     
+
     try:
         community_properties_gdf = gpd.read_file(full_url)
     except Exception as e:
         print(f"Error loading filtered property data from URL: {e}")
-        return f"Error loading properties for code {property_filter_code}. Check data source.", 500
+        return Response('{"error": "Server error loading properties."}', 
+                        status=500, 
+                        mimetype='application/json')
 
     # Step 3: APPLY PRE-PROCESSING to the newly loaded GDF
     # This must be done here since it was removed from global setup.
@@ -151,12 +171,13 @@ def show_map():
         community_properties_gdf['mod_date'] = community_properties_gdf['mod_date'].astype(str)
     # --- END PRE-PROCESSING ---
     
-    # ----------------------------------------------------------------------
     # Remainder of the Logic (Error Check and Map Generation)
     
     if community_properties_gdf.empty:
         long_comm_name = community_boundary.iloc[0]['name'] 
-        return f"No property data found for community: {long_comm_name} (Filter Code: {property_filter_code}).", 404
+        return Response(f'{{"error": "No property data found for community: {long_comm_name}."}}', 
+                        status=404, 
+                        mimetype='application/json')
         
     # Step 4: Extract the correct long name for the map title/header
     long_comm_name = community_properties_gdf['comm_name'].iloc[0]
@@ -182,23 +203,10 @@ def show_map():
     # 4. Extract the single Point geometry object from the GeoSeries
     centroid_point = centroid_series_4326.iloc[0]
 
-    # # Calculate the centroid in the projected space and reproject the single point result back to 4326
-    # centroid_4326 = projected_boundary.geometry.centroid.iloc[0].to_crs(epsg=4326)
-
-    # # Calculate map center and create the base Folium map
-    # map_center = [centroid_4326.y, centroid_4326.x] # Use the accurate lat/lon
-    # community_map = folium.Map(location=map_center, zoom_start=14)
-
     # Calculate map center and create the base Folium map
     # Extract the X (longitude) and Y (latitude) from the final Point object
     map_center = [centroid_point.y, centroid_point.x] 
-    community_map = folium.Map(location=map_center, zoom_start=14)
-
-
-    # # Calculate map center and create the base Folium map
-    # map_center = [community_boundary.geometry.centroid.y.iloc[0],
-    #               community_boundary.geometry.centroid.x.iloc[0]]
-    # community_map = folium.Map(location=map_center, zoom_start=14)
+    community_map = folium.Map(location=map_center, zoom_start=13)
 
     # Add Community Boundary to the map
     folium.GeoJson(
@@ -236,30 +244,21 @@ def show_map():
         tooltip_anchor='right'
     ).add_to(community_map)
 
-    # # Add the filtered properties to the map
-    # folium.GeoJson(
-    #     community_properties_gdf.to_json(),
-    #     name=f'{selected_community} Properties',
-    #     tooltip=folium.features.GeoJsonTooltip(
-    #         fields=['address', 'assessment_class_description', 'formatted_assessed_values'],
-    #         aliases=['Address', 'Class', 'Assessed Values']
-    #     ),
-    #     popup=folium.features.GeoJsonPopup(
-    #         fields=['address', 'assessment_class_description', 'formatted_assessed_values'],
-    #         aliases=['Address', 'Class', 'Assessed Values'] 
-    #     ),
-    #     style_function=lambda x: {'color': 'blue', 'weight': 1, 'fillColor': 'none'},
-    #     highlight_function=lambda x: {'fillColor': '#ffff00', 'color': '#000000', 'fillOpacity': 0.50, 'weight': 0.1},
-    #     tooltip_anchor='right'
-    # ).add_to(community_map)
 
     # Add Layer Control
     folium.LayerControl().add_to(community_map) 
 
     map_html = community_map._repr_html_()
 
-    # Pass the long name and map to the template
-    return render_template('map.html', map_html=map_html, community_name=long_comm_name)
+    # Wrap the map HTML with the community name for the client-side script
+    response_data = {
+        "map_html": map_html,
+        "community_name": long_comm_name
+    }
+    return Response(json.dumps(response_data), mimetype='application/json')
+
+    # # Pass the long name and map to the template
+    # return render_template('map.html', map_html=map_html, community_name=long_comm_name)
 
 if __name__ == '__main__':
     # Get the port from the environment variable $PORT,

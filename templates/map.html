@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Map of {{ community_name }}</title>
     <style>
-        /* Apply basic reset and set full page height */
         html, body { 
             height: 100%; 
             margin: 0; 
@@ -11,42 +11,58 @@
             font-family: Arial, sans-serif;
             background-color: #f4f4f9;
         }
-        /* Container to manage overall page content */
         .container { 
-            width: 100%; 
-            height: calc(100% - 60px); /* Account for padding and header */
+            width: 95%; 
+            max-width: 1200px;
+            height: calc(100% - 70px); 
             margin: 0 auto; 
-            padding: 20px; 
-            box-sizing: border-box; /* Include padding in width/height */
+            padding: 20px 0; 
+            box-sizing: border-box;
         }
         h1 {
             color: #007bff;
             margin-bottom: 10px;
-            font-size: 1.5em;
+            font-size: 1.8em;
+            text-align: center;
         }
-        /* Map specific styling for full width and a generous height */
-        #map { 
+        .map-wrapper { 
             width: 100%; 
-            height: 90vh; /* Use 90% of the viewport height for a large map */
-            border: 1px solid #ccc; /* Add a slight border */
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            height: 85vh; /* Use 85% of viewport height for a large map */
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
         }
-        a {
+        .back-link {
             color: #007bff;
             text-decoration: none;
-            margin-top: 10px;
+            margin-bottom: 15px;
             display: inline-block;
+            font-weight: bold;
         }
-        a:hover {
+        .back-link:hover {
             text-decoration: underline;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 600px) {
+            .container {
+                padding: 10px 5px;
+            }
+            h1 {
+                font-size: 1.5em;
+            }
+            .map-wrapper {
+                height: 75vh; /* Reduce height slightly for better mobile scrolling */
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Properties in {{ community_name }}</h1>
-        <p><a href="{{ url_for('index') }}">&larr; Back to Community Selection</a></p>
-        <div id="map">
+        <h1>{{ community_name }}</h1>
+        <p><a href="{{ url_for('index') }}" class="back-link">&larr; Back to Community Selection</a></p>
+        <div class="map-wrapper">
             {{ map_html | safe }}
         </div>
     </div>
