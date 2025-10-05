@@ -171,12 +171,27 @@ def show_map():
     # --- FIX 1: ACCURATE CENTROID CALCULATION (Removes UserWarning) ---
     # Reproject the boundary to the PROJected CRS temporarily
     projected_boundary = community_boundary.to_crs(epsg=PROJECTED_CRS)
+    
+    # 2. Calculate the centroid (resulting GeoSeries is still in PROJECTED_CRS)
+    centroid_series_proj = projected_boundary.geometry.centroid
 
-    # Calculate the centroid in the projected space and reproject the single point result back to 4326
-    centroid_4326 = projected_boundary.geometry.centroid.iloc[0].to_crs(epsg=4326)
+    # 3. Apply the CRS transformation to the GeoSeries
+    # This must be done on the GeoSeries, not the Point object itself
+    centroid_series_4326 = centroid_series_proj.to_crs(epsg=4326)
+
+    # 4. Extract the single Point geometry object from the GeoSeries
+    centroid_point = centroid_series_4326.iloc[0]
+
+    # # Calculate the centroid in the projected space and reproject the single point result back to 4326
+    # centroid_4326 = projected_boundary.geometry.centroid.iloc[0].to_crs(epsg=4326)
+
+    # # Calculate map center and create the base Folium map
+    # map_center = [centroid_4326.y, centroid_4326.x] # Use the accurate lat/lon
+    # community_map = folium.Map(location=map_center, zoom_start=14)
 
     # Calculate map center and create the base Folium map
-    map_center = [centroid_4326.y, centroid_4326.x] # Use the accurate lat/lon
+    # Extract the X (longitude) and Y (latitude) from the final Point object
+    map_center = [centroid_point.y, centroid_point.x] 
     community_map = folium.Map(location=map_center, zoom_start=14)
 
 
