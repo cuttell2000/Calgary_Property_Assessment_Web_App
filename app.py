@@ -165,10 +165,25 @@ def show_map():
     community_properties_gdf = community_properties_gdf.to_crs(epsg=4326)
     community_boundary = community_boundary.to_crs(epsg=4326)
 
+    # Define a projected CRS (UTM Zone 11N) for accurate geometric calculations
+    PROJECTED_CRS = 32611
+
+    # --- FIX 1: ACCURATE CENTROID CALCULATION (Removes UserWarning) ---
+    # Reproject the boundary to the PROJected CRS temporarily
+    projected_boundary = community_boundary.to_crs(epsg=PROJECTED_CRS)
+
+    # Calculate the centroid in the projected space and reproject the single point result back to 4326
+    centroid_4326 = projected_boundary.geometry.centroid.iloc[0].to_crs(epsg=4326)
+
     # Calculate map center and create the base Folium map
-    map_center = [community_boundary.geometry.centroid.y.iloc[0],
-                  community_boundary.geometry.centroid.x.iloc[0]]
+    map_center = [centroid_4326.y, centroid_4326.x] # Use the accurate lat/lon
     community_map = folium.Map(location=map_center, zoom_start=14)
+
+
+    # # Calculate map center and create the base Folium map
+    # map_center = [community_boundary.geometry.centroid.y.iloc[0],
+    #               community_boundary.geometry.centroid.x.iloc[0]]
+    # community_map = folium.Map(location=map_center, zoom_start=14)
 
     # Add Community Boundary to the map
     folium.GeoJson(
@@ -177,9 +192,21 @@ def show_map():
         style_function=lambda x: {'fillColor': '#007bff', 'color': 'black', 'weight': 2, 'fillOpacity': 0.1}
     ).add_to(community_map)
 
-    # Add the filtered properties to the map
+    # --- FIX 2: MEMORY OPTIMIZATION VIA COLUMN SLICING ---
+    # Only select the columns absolutely necessary for the GeoJSON output (geometry + tooltip/popup fields)
+    columns_for_export = [
+        'geometry', 
+        'address', 
+        'assessment_class_description', 
+        'formatted_assessed_values'
+        # Add 'mod_date' here if you want it available for popups
+    ]
+    properties_for_export = community_properties_gdf[columns_for_export]
+
+    # Add the filtered and optimized properties to the map
+    # This line now uses a much smaller GeoJSON string, reducing memory pressure during serialization
     folium.GeoJson(
-        community_properties_gdf.to_json(),
+        properties_for_export.to_json(), # Use the optimized GDF
         name=f'{selected_community} Properties',
         tooltip=folium.features.GeoJsonTooltip(
             fields=['address', 'assessment_class_description', 'formatted_assessed_values'],
@@ -193,6 +220,23 @@ def show_map():
         highlight_function=lambda x: {'fillColor': '#ffff00', 'color': '#000000', 'fillOpacity': 0.50, 'weight': 0.1},
         tooltip_anchor='right'
     ).add_to(community_map)
+
+    # # Add the filtered properties to the map
+    # folium.GeoJson(
+    #     community_properties_gdf.to_json(),
+    #     name=f'{selected_community} Properties',
+    #     tooltip=folium.features.GeoJsonTooltip(
+    #         fields=['address', 'assessment_class_description', 'formatted_assessed_values'],
+    #         aliases=['Address', 'Class', 'Assessed Values']
+    #     ),
+    #     popup=folium.features.GeoJsonPopup(
+    #         fields=['address', 'assessment_class_description', 'formatted_assessed_values'],
+    #         aliases=['Address', 'Class', 'Assessed Values'] 
+    #     ),
+    #     style_function=lambda x: {'color': 'blue', 'weight': 1, 'fillColor': 'none'},
+    #     highlight_function=lambda x: {'fillColor': '#ffff00', 'color': '#000000', 'fillOpacity': 0.50, 'weight': 0.1},
+    #     tooltip_anchor='right'
+    # ).add_to(community_map)
 
     # Add Layer Control
     folium.LayerControl().add_to(community_map) 
