@@ -1,20 +1,26 @@
 ---
 title: Calgary Property Assessment Map
-sdk: docker
-app_port: 7860
+emoji: 📊
+colorFrom: indigo
+colorTo: yellow
+sdk: gradio
+sdk_version: 6.29.1
+python_version: "3.12"
+app_file: gradio_app.py
+pinned: false
 ---
 
 # Calgary Property Assessment Map
 
-This Flask app maps Calgary community boundaries and property assessment data
-from the City of Calgary Open Data API.
+This app maps Calgary community boundaries and property assessment data from
+the City of Calgary Open Data API.
 
 ## Run locally
 
-Install the deployment dependencies and start the Flask development server:
+Install the app dependencies and start the Flask development server:
 
 ```bash
-pip install -r requirements-hf.txt
+pip install -r requirements.txt
 python app.py
 ```
 
@@ -22,13 +28,15 @@ Open `http://localhost:5000`.
 
 ## Deploy to Hugging Face Spaces
 
-Create a Space named `Calgary_Property_Assessment_Map_App` with the Docker
-SDK. Push the runtime files (`Dockerfile`, `README.md`, `app.py`,
-`requirements-hf.txt`, and the `templates` directory) to the Space's Git
-remote. Do not push the original repository's `venv` directory; it is tracked
-in that repository but is not needed by the Space.
+The Hugging Face Space uses Gradio on its free ZeroGPU hardware. Its
+`gradio_app.py` interface reuses the existing Flask property-map route, while
+`app.py` remains available for local Flask development. The Space installs
+dependencies from `requirements.txt`.
 
-The Docker image installs the runtime dependencies and starts Gunicorn on
-port 7860. The app fetches community boundaries at startup and requests
-property data from the City of Calgary API when a community is selected, so
-the Space needs outbound network access.
+The property-map callback uses ZeroGPU's required `@spaces.GPU` wrapper even
+though its geospatial work is CPU-based; this can add queueing or execution
+limits compared with CPU Basic hardware.
+
+The app fetches community boundaries at startup and requests property data
+from the City of Calgary API when a community is selected, so it needs
+outbound network access.

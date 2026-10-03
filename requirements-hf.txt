@@ -1,5 +1,0 @@
-Flask
-folium
-geopandas
-gunicorn
-pandas
